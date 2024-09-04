@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>LinkedIn Automation</title>
+  <style>
+    body { width: 300px; padding: 10px; }
+    textarea { width: 100%; height: 60px; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h2>LinkedIn Automation</h2>
+  
+  <h3>Connection Request Template</h3>
+  <textarea id="connectionTemplate">Hi {name}, I noticed you work at {company}. I'd love to connect!</textarea>
+  
+  <h3>Network Message Template</h3>
+  <textarea id="networkTemplate">Hello {name}, I see you're at {company}. I wanted to reach out about...</textarea>
+  
+  <button id="updateTemplates">Update Templates</button>
+  <button id="startCampaign">Start Connection Campaign</button>
+  <button id="messageNetwork">Message Network</button>
+  <button id="stopCampaign">Stop Campaign</button> <!-- Added Stop Campaign Button -->
+  
+  <script src="popup.js"></script>
+</body>
+</html>

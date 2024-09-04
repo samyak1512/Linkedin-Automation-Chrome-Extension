@@ -1,0 +1,19 @@
+{
+    "manifest_version": 3,
+    "name": "LinkedIn Automation Tool",
+    "version": "1.0",
+    "description": "Automate LinkedIn connections and messaging",
+    "permissions": [
+      "activeTab",
+      "storage"
+    ],
+    "action": {
+      "default_popup": "popup.html"
+    },
+    "content_scripts": [
+      {
+        "matches": ["https://www.linkedin.com/*"],
+        "js": ["content.js"]
+      }
+    ]
+  }
