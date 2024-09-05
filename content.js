@@ -9,7 +9,11 @@ let stopCampaign = false;
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "startCampaign") {
     stopCampaign = false; // Reset flag
-    startConnectionCampaign();
+    extractPersonsForCampaign().then(persons => {
+      sendResponse({ status: "Persons extracted", count: persons.length });
+      startConnectionCampaign();
+    });
+    return true; // Indicates that the response is sent asynchronously
   } else if (request.action === "messageNetwork") {
     stopCampaign = false; // Reset flag
     messageNetwork();
@@ -23,26 +27,40 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-async function startConnectionCampaign() {
+// New function to extract all persons for the connection campaign
+async function extractPersonsForCampaign() {
+  const persons = [];
   const connectionButtons = document.querySelectorAll('button[aria-label^="Invite"]');
-  console.log(`Found ${connectionButtons.length} connection buttons`);
-  
-  for (const button of connectionButtons) {
-    if (stopCampaign) {
-      console.log("Campaign stopped");
-      break; // Exit the loop if campaign is stopped
-    }
+  console.log(`Found ${connectionButtons.length} potential connections`);
 
+  for (const button of connectionButtons) {
     const name = extractName(button);
     const company = extractCompany(button);
-    
-    await sendConnectionRequest(button, name, company);
+    persons.push({ name, company, button });
+  }
+
+  return persons;
+}
+
+// Modified startConnectionCampaign function
+async function startConnectionCampaign() {
+  const persons = await extractPersonsForCampaign();
+  console.log(`Extracted ${persons.length} persons for the campaign`);
+
+  for (const person of persons) {
+    if (stopCampaign) {
+      console.log("Campaign stopped");
+      break;
+    }
+
+    await sendConnectionRequest(person.button, person.name, person.company);
     
     // Wait to avoid rate limiting
     await new Promise(resolve => setTimeout(resolve, 3000 + Math.random() * 2000));
   }
 }
 
+// Start sending messages to network
 async function messageNetwork() {
   const messageButtons = document.querySelectorAll('button[aria-label^="Message"]');
   console.log(`Found ${messageButtons.length} message buttons`);
@@ -62,27 +80,26 @@ async function messageNetwork() {
     await new Promise(resolve => setTimeout(resolve, 3000 + Math.random() * 2000));
   }
 }
+
+// Extract name from the element
 function extractName(element) {
-  // Start from the button and traverse up to find the container
   let container = element.closest('.entity-result__item') || 
                   element.closest('.invitation-card__info') ||
-                  element.closest('.hiredivider-item') || // Added new potential container
-                  element.closest('li'); // Fallback to closest list item
+                  element.closest('.hiredivider-item') || 
+                  element.closest('li'); 
   
   if (!container) {
-    console.log('Container not found for name extraction, using document');
     container = document;
   }
   
-  // Try different selectors to find the name
   const nameSelectors = [
     '.entity-result__title-text a span[aria-hidden="true"]',
     '.entity-result__title-text a',
     '.invitation-card__title',
     '[data-control-name="actor"]',
-    'span.artdeco-entity-lockup__title', // Added new potential selector
-    'span.entity-result__title-text', // Added new potential selector
-    'h3.actor-name' // Added new potential selector
+    'span.artdeco-entity-lockup__title', 
+    'span.entity-result__title-text',
+    'h3.actor-name'
   ];
   
   for (let selector of nameSelectors) {
@@ -95,25 +112,21 @@ function extractName(element) {
     }
   }
   
-  console.log('Name not found with any selector');
   return "there";
 }
 
+// Extract company from the element
 function extractCompany(element) {
-  // Start from the button and traverse up to find the container
   let container = element.closest('.entity-result__item') || 
                   element.closest('.invitation-card__info') ||
-                  element.closest('.hiredivider-item') || // Added new potential container
-                  element.closest('li'); // Fallback to closest list item
+                  element.closest('.hiredivider-item') || 
+                  element.closest('li');
   
   if (!container) {
-    console.log('Container not found for company extraction, using document');
     container = document;
   }
   
-  // Try different selectors to find the company
   const companySelectors = [
-    
     '.entity-result__summary'
   ];
   
@@ -121,35 +134,30 @@ function extractCompany(element) {
     const companyElement = container.querySelector(selector);
     if (companyElement) {
       const company = companyElement.textContent.trim();
-      const lastWord = company.split(' ').pop();  // Split by spaces and select the last word
-      console.log('Extracted last word of company:', lastWord);
+      const lastWord = company.split(' ').pop();
       return lastWord;
     }
   }
   
-  console.log('Company not found with any selector');
   return "your company";
 }
 
+// Send a connection request
 async function sendConnectionRequest(button, name, company) {
   try {
     logElementInfo(button);
     console.log(`Attempting to send connection request to ${name} at ${company}`);
     
-    // Click the "Connect" button
     button.click();
     
-    // Wait for the modal to appear
     await waitForElement('.send-invite__actions', 5000);
     
-    // Check if "Add a note" button exists, if not, the note field might already be visible
     const addNoteButton = document.querySelector('button[aria-label="Add a note"]');
     if (addNoteButton) {
       addNoteButton.click();
       await waitForElement('#custom-message', 5000);
     }
     
-    // Fill in the custom message
     const messageInput = document.querySelector('#custom-message');
     if (messageInput) {
       const personalizedMessage = connectionMessageTemplate
@@ -157,33 +165,27 @@ async function sendConnectionRequest(button, name, company) {
         .replace('{company}', company);
       messageInput.value = personalizedMessage;
       messageInput.dispatchEvent(new Event('input', { bubbles: true }));
-    } else {
-      console.log('Message input field not found');
     }
     
-    // Click the "Send" button
     const sendButton = await waitForElement('button[aria-label="Send invitation"]', 5000);
     if (sendButton) {
       sendButton.click();
       console.log(`Connection request sent to ${name} at ${company}`);
-    } else {
-      console.log('Send button not found');
     }
   } catch (error) {
     console.error(`Failed to send connection request to ${name}:`, error);
   }
 }
 
+// Send a network message
 async function sendNetworkMessage(button, name, company) {
   try {
     logElementInfo(button);
     console.log(`Attempting to send message to ${name} at ${company}`);
     
-    // Click the "Message" button
     button.click();
     await waitForElement('.msg-form__contenteditable', 5000);
     
-    // Fill in the custom message
     const messageInput = await waitForElement('.msg-form__contenteditable', 5000);
     if (messageInput) {
       const personalizedMessage = networkMessageTemplate
@@ -193,19 +195,17 @@ async function sendNetworkMessage(button, name, company) {
       messageInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
     
-    // Click the "Send" button
     const sendButton = await waitForElement('button[aria-label="Send"]', 5000);
     if (sendButton) {
       sendButton.click();
       console.log(`Message sent to ${name} at ${company}`);
-    } else {
-      console.log('Send button not found');
     }
   } catch (error) {
     console.error(`Failed to send message to ${name}:`, error);
   }
 }
 
+// Wait for an element to appear
 function waitForElement(selector, timeout = 10000) {
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
@@ -216,7 +216,7 @@ function waitForElement(selector, timeout = 10000) {
         resolve(element);
       } else if (Date.now() - startTime >= timeout) {
         console.log(`Timeout waiting for element: ${selector}`);
-        resolve(null); // Resolve with null instead of rejecting
+        resolve(null); 
       } else {
         setTimeout(checkElement, 100);
       }
@@ -226,6 +226,7 @@ function waitForElement(selector, timeout = 10000) {
   });
 }
 
+// Log information about the element
 function logElementInfo(element) {
   console.log('Element:', element);
   console.log('Parent structure:', element.closest('.entity-result__item') || 
